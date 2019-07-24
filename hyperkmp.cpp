@@ -13,12 +13,13 @@ using namespace std;
 
 unsigned n, m, matchCount;
 char str[MAX_N + 5], pattern[MAX_N + 5];
-unsigned pi[MAX_N + 1];
-std::vector<unsigned> match;
+unsigned match[MAX_COUNT];
+#if 0
 std::vector<std::pair<unsigned, unsigned>> store;
 unsigned **jumps;
 uint64_t *configurations;
 unsigned shifted;
+#endif
 
 static void binary(uint64_t x) {
     cerr << "bits : ";
@@ -48,7 +49,7 @@ static int encode(char c)
     return c - '0' + 2 * SIGMA;
 }
 
-static uint64_t log2(uint64_t x) 
+static uint64_t log2(uint64_t x)
 // log2 when x power of 2
 {
     uint64_t lg = 1;
@@ -57,6 +58,7 @@ static uint64_t log2(uint64_t x)
     return lg;
 }
 
+#if 0
 void preprocessing() {
   // assert all letters are from the lower english alphabet
 
@@ -81,12 +83,12 @@ void preprocessing() {
 
     // store all jumps, inclusive the first comparison
     // with the initial stateunsigned maximum = 0;
-    
+
     // for strings like 'TTTTTTTTTTTTT', this takes quite long
     // TODO: replace with topological sort on DAG
 #if 0
     store.clear();
-    
+
     while (q > 0) {
         q = pi[q - 1];
         if (q) {
@@ -103,9 +105,9 @@ void preprocessing() {
     q = pi[q - 1];
     if (q == 0)
         continue;
-    
+
     configuration = configurations[q];
-    
+
     // Connect to the node q
     if (configuration == 0) {
         //cerr << "maaa kann das sein " << ++shifted << endl;
@@ -115,7 +117,7 @@ void preprocessing() {
         //cerr << "am bagat " << q << " si " << pattern[q] << endl;
         continue;
     }
-    
+
     if (getBit(configuration, encode(pattern[q]))) {
         // don't change anything in jumps;
         // pointer to it?
@@ -130,7 +132,7 @@ void preprocessing() {
             uint64_t save = configuration;
             unsigned ptr = 0;
             unsigned toMerge = encode(pattern[q]);
-            
+
             while (save) {
                 unsigned lg = log2(save & -save);
                 if (toMerge != lg)
@@ -147,20 +149,20 @@ void preprocessing() {
     } else {
         // add only one
         //cerr << "kann das sein mit " << index << " " << q << ++shifted << endl;
-        
+
         //cerr << configuration << endl;
         unsigned size = __builtin_popcountll(configuration);
         //cerr << configuration << endl;
-        
+
         unsigned toMerge = encode(pattern[q]);
         //cerr << "toMerge " << toMerge << endl;
-        
+
         jumps[index] = new unsigned[size + 1];
         uint64_t save = configuration, ptr = 0;
         bool inserted = false;
-        
+
         //cerr << "reduce " << save << endl;
-        
+
         while (save) {
             unsigned lg = log2(save & -save);
             //cerr << "between " << lg << endl;
@@ -172,7 +174,7 @@ void preprocessing() {
                 //cerr << "2 " << ptr << endl;
                 jumps[index][ptr++] = q;
                 inserted = true;
-                
+
                 // And add the one with which you compared
                 jumps[index][ptr] = jumps[q][ptr - 1];
                 ptr++;
@@ -197,13 +199,13 @@ void preprocessing() {
     }
   }
 #endif
-    
+
 #if 0
     //cerr << "for index = " << index << " conf = ";
     //binary(configuration);
-    
+
     //cerr << maximum << endl;
-    
+
     if (!store.empty()) {
         maximum = std::max(maximum, static_cast<unsigned>(store.size()));
         //cerr << "stored : " << store.size() << endl;
@@ -212,7 +214,7 @@ void preprocessing() {
 
 #if 0
       if (store.size() == 2) {
-      
+
           cerr << "store " << store.begin()->first << " " << store.begin()->second << endl;
       cerr << (--store.end())->first << " " << (--store.end())->second << " end strre" << endl;
       }
@@ -232,7 +234,7 @@ void preprocessing() {
   }
 
   cerr << "maximum stored " << maximum << endl;
-#endif    
+#endif
 }
 
 void obtainNextState(unsigned& state, char currChar)
@@ -243,23 +245,23 @@ void obtainNextState(unsigned& state, char currChar)
     return;
     }
   // Check if inside
-  
+
   //cerr << "come with " << currChar << " mit " << encode(currChar) << endl;
   //binary(configurations[state]);
-  
+
   if (!getBit(configurations[state], encode(currChar))) {
     state = 0;
     return;
     }
-  
+
   // only one bit
   if ((configurations[state] & (configurations[state] - 1)) == 0) {
     state = jumps[state][0];
     return;
     }
-  
+
   //cerr << "Realyy" << currChar << " " << encode(currChar) << endl;
-  
+
   // Get its index;
   unsigned code = encode(currChar);
   // count how many bits are set before currChar
@@ -272,7 +274,7 @@ void obtainNextState(unsigned& state, char currChar)
   binary(remainedBits);
   cerr << "pos = " << pos << " mit " << currChar;
   binary(configurations[state]);
-  
+
   cerr << "get rest " << jumps[state][pos] << endl;
 #endif
   // And get the final result
@@ -283,7 +285,7 @@ void obtainNextState(unsigned& state, char currChar)
 void kmp() {
   if (m > n) {
     cerr << "pattern bigger than string" << endl;
-    exit(0); 
+    exit(0);
   }
   preprocessing();
     cerr << "end preprocessing" << endl;
@@ -320,7 +322,7 @@ void kmp() {
     if (inside) {
       cerr << "end " << endl;
     }
-#endif  
+#endif
     //cerr << "before " << q << endl;
     // it shoud remain as it is now!
 #if 1
@@ -329,16 +331,16 @@ void kmp() {
         obtainNextState(q, str[i]);
 #else
     unsigned take = q;
-    
+
     q = save;
     while ((q > 0) && (str[i] != pattern[q]))
         q = pi[q - 1];
 #endif
-    
+
 #if 0
     if (q != take) {
         //cerr << "Bai ce facem " << i << " " << q << " vs " << take << "cu char " << str[i] << " si pa " << pattern[q] << endl;
-        
+
     }
 #endif
     if (str[i] == pattern[q]) {
@@ -350,21 +352,144 @@ void kmp() {
       }
       // goes a step back, because the condition in while will be already set to false
         q = pi[q - 1];
-        
+
     }
   }
+}
+#endif
+
+unsigned pi[MAX_N + 2];
+unsigned psi[MAX_N + 2];
+//unsigned lastSeen[MAX_N + 2];
+
+void normalPi() {
+  unsigned k = 0;
+	// Compute pi and psi
+//pi = new unsigned[m];
+	//psi = new unsigned[m + 1]; // special for the last char
+	for (unsigned q = 1; q < m; ++q) {
+	  //cerr << "wir sind jetzt bei " << q << endl;
+    while ((k > 0) && (pattern[q] != pattern[k])) {
+      k = pi[k - 1];
+    }
+    if (pattern[q] == pattern[k]) {
+      k++;
+    }
+    pi[q] = k;
+	}
+}
+
+#if 1
+void compressPi() {
+	unsigned k = 0;
+	// Compute pi and psi
+//pi = new unsigned[m];
+	//psi = new unsigned[m + 1]; // special for the last char
+	for (unsigned q = 1; q < m; ++q) {
+	  //cerr << "wir sind jetzt bei " << q << endl;
+    while ((k > 0) && (pattern[q] != pattern[k])) {
+      k = pi[k - 1];
+    }
+    if (pattern[q] == pattern[k]) {
+      k++;
+    }
+    pi[q] = k;
+
+		// Compres possbile path
+		// If no jump, connect directly to 0
+		//cerr << q << " trigger " << (q + 1) << " ";
+		if (pi[q] == 0) {
+        //cerr << " = 0" << endl;
+			psi[q + 1] = 0;
+		// Try to hang the edge (q, pi[q]) at the root of pi[q]
+		} else if ((psi[pi[q]] != 0) && (pattern[pi[q]] == pattern[psi[pi[q]]])) {
+			psi[q + 1] = psi[pi[q]];
+			//lastSeen[q + 1] = pi[q];
+      //cerr << "second if -> " << endl;
+      //cerr << psi[q + 1] << endl;
+		} else {
+			// Put the edge where it was
+			psi[q + 1] = pi[q];
+			//lastSeen[q + 1] = pi[q];
+			//cerr << "third if -> " << endl;
+			//cerr << psi[q + 1] << endl;
+		}
+  }
+  //delete[] pi;
+}
+#endif
+
+void hyperKmp() {
+	if (m > n) {
+		cerr << "pattern biger than string!" << endl;
+		return;
+	}
+	compressPi();
+  // cerr << "go voer pi" << endl;
+
+	unsigned q = 0;
+	unsigned maximum = 0;
+	for (unsigned index = 0; index < n; ++index) {
+		// Search now on psi
+  //unsigned loopsCtr = 0;
+
+#if 1
+		//unsigned bef = q;
+		int last = -1;
+		//cerr << "start with " << q << endl;
+		while ((q > 0) && (str[index] != pattern[q])) {
+			last = pi[q - 1];
+			//cerr << "set last = " << last << endl;
+			q = psi[q];
+      //loopsCtr++;
+		}
+		//cerr << "end with " << q << " and " << last << endl;
+
+    if (last != -1)
+      q = last;
+      //q = (last == -1) ? q : last;
+		//unsigned after = q;
+#else
+  //q = bef;
+  unsigned ctr = 0;
+  while ((q > 0) && (str[index] != pattern[q])) {
+    q = pi[q - 1];
+    loopsCtr++;
+  }
+#if 0
+  if (q != after) {
+    cerr << "assert : at " << index << " " << q << " vs " << after << endl;
+    assert(0);
+  }
+#endif
+#endif
+  //if (loopsCtr > maximum)
+    //maximum = loopsCtr;
+
+		if (str[index] == pattern[q]) {
+			++q;
+		}
+		if (q == m) {
+			if ((++matchCount) <= MAX_COUNT) {
+        match[matchCount - 1] = index - m + 1;
+      }
+      // goes a step back, because the condition in while will be already set to false
+			//q = pi[q - 1];
+		}
+	}
+	cerr << maximum << endl;
 }
 
 int main(int argc, char** argv) {
     ifstream in;
-#if 1
+#if 0
   if (argc < 2) {
     cerr << "Usage: " << argv[0] << "file " << endl;
     return 0;
   }
   in.open(argv[1]);
 #else
-  in.open("strmatch.in");
+  in.open(0 ? "strmatch.in" : "test/grader_test30.in");
 #endif
   in >> pattern >> str;
   m = strlen(pattern);
@@ -372,13 +497,21 @@ int main(int argc, char** argv) {
 
   if (m > n)
         goto print;
-  
+
   //cerr << pattern << endl << str << endl;
 
-  kmp();
+#if 0
+  compressPi();
+
+  for (unsigned index = 0; index < m; ++index) {
+      cerr << index << " -> " << psi[index] << endl;
+  }
+  cerr << endl;
+#endif
+  hyperKmp();
 
   //cerr << encode('9') << " " << encode('b') << " " << encode('C');
-  
+
   print : {
       ofstream out;
 #if 0
