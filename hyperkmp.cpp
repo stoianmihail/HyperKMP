@@ -18,6 +18,7 @@ std::vector<unsigned> match;
 std::vector<std::pair<unsigned, unsigned>> store;
 unsigned **jumps;
 uint64_t *configurations;
+unsigned shifted;
 
 static void binary(uint64_t x) {
     cerr << "bits : ";
@@ -47,10 +48,17 @@ static int encode(char c)
     return c - '0' + 2 * SIGMA;
 }
 
+static uint64_t log2(uint64_t x) 
+// log2 when x power of 2
+{
+    uint64_t lg = 1;
+    while ((1ULL << lg) < x)
+        ++lg;
+    return lg;
+}
+
 void preprocessing() {
   // assert all letters are from the lower english alphabet
-  for (unsigned index = 0; index < m; ++index)
-    assert(isalnum(pattern[index]));
 
   unsigned k = 0;
   for (unsigned q = 1; q < m; q++) {
@@ -62,21 +70,23 @@ void preprocessing() {
     }
     pi[q] = k;
   }
-#if 1
+
     cerr << m << endl;
   unsigned maximum = 0;
   jumps = new unsigned*[m];
   configurations = new uint64_t[m];
   for (unsigned index = 0; index < m; ++index) {
   	unsigned q = index;
-    uint64_t configuration = 0;
+    uint64_t configuration;
 
     // store all jumps, inclusive the first comparison
     // with the initial stateunsigned maximum = 0;
     
     // for strings like 'TTTTTTTTTTTTT', this takes quite long
     // TODO: replace with topological sort on DAG
+#if 0
     store.clear();
+    
     while (q > 0) {
         q = pi[q - 1];
         if (q) {
@@ -86,8 +96,109 @@ void preprocessing() {
             }
         }
     }
+#else
+    // Look at pi[q - 1]
+    if (q == 0)
+        continue;
+    q = pi[q - 1];
+    if (q == 0)
+        continue;
     
+    configuration = configurations[q];
     
+    // Connect to the node q
+    if (configuration == 0) {
+        //cerr << "maaa kann das sein " << ++shifted << endl;
+        jumps[index] = new unsigned[1];
+        setBit(configurations[index], encode(pattern[q]));
+        jumps[index][0] = q;
+        //cerr << "am bagat " << q << " si " << pattern[q] << endl;
+        continue;
+    }
+    
+    if (getBit(configuration, encode(pattern[q]))) {
+        // don't change anything in jumps;
+        // pointer to it?
+        //cerr << "viele" << endl;
+        configurations[index] = configuration;
+#if 1
+        // Create only when configuration has more than one bit
+        //if (configuration & (configuration - 1)) {
+            // Recover the most fresh position!
+            unsigned size = __builtin_popcountll(configuration);
+            jumps[index] = new unsigned[size];
+            uint64_t save = configuration;
+            unsigned ptr = 0;
+            unsigned toMerge = encode(pattern[q]);
+            
+            while (save) {
+                unsigned lg = log2(save & -save);
+                if (toMerge != lg)
+                    jumps[index][ptr] = jumps[q][ptr];
+                else
+                    jumps[index][ptr] = q;
+                ++ptr;
+                save &= save - 1;
+            }
+        //}
+#else
+    jumps[index] = jumps[q];
+#endif
+    } else {
+        // add only one
+        //cerr << "kann das sein mit " << index << " " << q << ++shifted << endl;
+        
+        //cerr << configuration << endl;
+        unsigned size = __builtin_popcountll(configuration);
+        //cerr << configuration << endl;
+        
+        unsigned toMerge = encode(pattern[q]);
+        //cerr << "toMerge " << toMerge << endl;
+        
+        jumps[index] = new unsigned[size + 1];
+        uint64_t save = configuration, ptr = 0;
+        bool inserted = false;
+        
+        //cerr << "reduce " << save << endl;
+        
+        while (save) {
+            unsigned lg = log2(save & -save);
+            //cerr << "between " << lg << endl;
+            if (lg < toMerge) {
+                //cerr << "1 " << ptr << endl;
+                jumps[index][ptr] = jumps[q][ptr];
+                ++ptr;
+            } else if (!inserted && lg > toMerge) {
+                //cerr << "2 " << ptr << endl;
+                jumps[index][ptr++] = q;
+                inserted = true;
+                
+                // And add the one with which you compared
+                jumps[index][ptr] = jumps[q][ptr - 1];
+                ptr++;
+            } else {
+                //cerr << "3 " << ptr << endl;
+                jumps[index][ptr] = jumps[q][ptr - 1];
+                ++ptr;
+            }
+            save &= save - 1;
+        }
+
+        setBit(configuration, encode(pattern[q]));
+        configurations[index] = configuration;
+
+#if 0
+        binary(configuration);
+        for (ptr = 0; ptr < size + 1; ptr++) {
+            cerr << jumps[index][ptr] << " ";
+        }
+        cerr << "end merge" << endl;
+#endif
+    }
+  }
+#endif
+    
+#if 0
     //cerr << "for index = " << index << " conf = ";
     //binary(configuration);
     
@@ -119,6 +230,7 @@ void preprocessing() {
     configurations[index] = configuration;
     //binary(configurations[index]);
   }
+
   cerr << "maximum stored " << maximum << endl;
 #endif    
 }
@@ -129,7 +241,7 @@ void obtainNextState(unsigned& state, char currChar)
   if (!isalnum(currChar)) {
     state = 0;
     return;
-}
+    }
   // Check if inside
   
   //cerr << "come with " << currChar << " mit " << encode(currChar) << endl;
@@ -145,6 +257,8 @@ void obtainNextState(unsigned& state, char currChar)
     state = jumps[state][0];
     return;
     }
+  
+  //cerr << "Realyy" << currChar << " " << encode(currChar) << endl;
   
   // Get its index;
   unsigned code = encode(currChar);
@@ -209,14 +323,24 @@ void kmp() {
 #endif  
     //cerr << "before " << q << endl;
     // it shoud remain as it is now!
-#if 0
+#if 1
+//    unsigned save = q;
     if ((q > 0) && (str[i] != pattern[q]))
         obtainNextState(q, str[i]);
 #else
+    unsigned take = q;
+    
+    q = save;
     while ((q > 0) && (str[i] != pattern[q]))
         q = pi[q - 1];
 #endif
-
+    
+#if 0
+    if (q != take) {
+        //cerr << "Bai ce facem " << i << " " << q << " vs " << take << "cu char " << str[i] << " si pa " << pattern[q] << endl;
+        
+    }
+#endif
     if (str[i] == pattern[q]) {
       q++;
     }
