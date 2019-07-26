@@ -5,6 +5,8 @@
 #include <cctype>
 #include <vector>
 #include <algorithm>
+#include <unordered_map>
+#include <set>
 
 #define MAX_N 2000000
 #define MAX_COUNT 1000
@@ -360,16 +362,15 @@ void kmp() {
 
 unsigned pi[MAX_N + 2];
 unsigned psi[MAX_N + 2];
+unsigned degree[MAX_N + 2];
+unsigned *edges[MAX_N + 2];
+unsigned omega[MAX_N + 2];
 //unsigned lastSeen[MAX_N + 2];
 
 void normalPi() {
   unsigned k = 0;
-	// Compute pi and psi
-//pi = new unsigned[m];
-	//psi = new unsigned[m + 1]; // special for the last char
-	for (unsigned q = 1; q < m; ++q) {
-	  //cerr << "wir sind jetzt bei " << q << endl;
-    while ((k > 0) && (pattern[q] != pattern[k])) {
+  for (unsigned q = 1; q < m; ++q) {
+	  while ((k > 0) && (pattern[q] != pattern[k])) {
       k = pi[k - 1];
     }
     if (pattern[q] == pattern[k]) {
@@ -379,15 +380,73 @@ void normalPi() {
 	}
 }
 
+void dfs(unsigned currentState, unordered_map<char, unsigned>& stackTable, set<unsigned>& setOfStates) 
+// at every currentState we explore a branch, having stored the active nodes in a hash table
+{
+  int replacer = -1;
+  unsigned minimumHalt = 0;
+  
+  // We don't use the state 0, because in the search of KMP we always stop before reaching 0
+  if (currentState != 0) {
+    auto iter = stackTable.find(pattern[currentState]);
+    
+    // Not yet in table? Add it.
+    if (iter == stackTable.end()) {
+      stackTable[pattern[currentState]] = currentState;
+      setOfStates.insert(currentState);
+    } else {
+      // Than, see which index should be replaced
+      // With this, update now the overall minimum, to use it for the next steps
+      replacer = iter->second;
+      
+      // TODO: use a fibonaci heap / priority_queue with lazy-update / or google set, but please, no STL-set!
+      // Why fibonacci-heap? Because we increase for every char the last seen position, so an operation of increaseKey.
+
+      // Update the map
+      stackTable[pattern[currentState]] = currentState;
+      
+      // Update the set
+      setOfStates.erase(replacer);
+      setOfStates.insert(currentState);
+    }
+    minimumHalt = *setOfStates.begin();
+  }
+  
+  omega[currentState] = psi[minimumHalt];
+  // Explore the neighbours
+  for (unsigned index = 0; index < degree[currentState]; ++index) {
+    dfs(edges[currentState][index], stackTable, setOfStates);
+  }
+  
+  // Reset the table
+  if (currentState != 0) {
+    // Did we change something?
+    if (replacer == -1) {
+      // That's the first time the char has been inserted
+      // Simply delete it.
+      stackTable.erase(pattern[currentState]);
+      setOfStates.erase(currentState);
+    } else {
+      // We've changed the last index for the char
+      // Update the last index
+      stackTable[pattern[currentState]] = replacer;
+      
+      // Update the state
+      setOfStates.erase(currentState);
+      setOfStates.insert(replacer);
+    }
+  }
+}
+
 #if 1
-void compressPi() {
+void compressPi() 
+// compress pi[] and create two new arrays: psi[] and omega[]
+// description in README
+{
 	unsigned k = 0;
 	// Compute pi and psi
-//pi = new unsigned[m];
-	//psi = new unsigned[m + 1]; // special for the last char
-	for (unsigned q = 1; q < m; ++q) {
-	  //cerr << "wir sind jetzt bei " << q << endl;
-    while ((k > 0) && (pattern[q] != pattern[k])) {
+  for (unsigned q = 1; q < m; ++q) {
+	  while ((k > 0) && (pattern[q] != pattern[k])) {
       k = pi[k - 1];
     }
     if (pattern[q] == pattern[k]) {
@@ -395,68 +454,92 @@ void compressPi() {
     }
     pi[q] = k;
 
-		// Compres possbile path
+		// Compress possbile path
 		// If no jump, connect directly to 0
-		//cerr << q << " trigger " << (q + 1) << " ";
 		if (pi[q] == 0) {
-        //cerr << " = 0" << endl;
-			psi[q + 1] = 0;
+      psi[q + 1] = 0;
 		// Try to hang the edge (q, pi[q]) at the root of pi[q]
-		} else if ((psi[pi[q]] != 0) && (pattern[pi[q]] == pattern[psi[pi[q]]])) {
+		} else if (pattern[q + 1] == pattern[pi[q]]) {
 			psi[q + 1] = psi[pi[q]];
-			//lastSeen[q + 1] = pi[q];
-      //cerr << "second if -> " << endl;
-      //cerr << psi[q + 1] << endl;
 		} else {
-			// Put the edge where it was
+			// Put the edge back where it was
 			psi[q + 1] = pi[q];
-			//lastSeen[q + 1] = pi[q];
-			//cerr << "third if -> " << endl;
-			//cerr << psi[q + 1] << endl;
 		}
+		
+		//cerr << q << " trigger with " << pi[q] << " " << psi[q + 1] << endl;
+		
+		// build the graph of psi, by counting the degree of each node
+		degree[psi[q + 1]]++;
   }
-  //delete[] pi;
+  
+  // Alloc the graph and reset the degrees to 0
+  for (unsigned q = 0; q <= m; ++q) {
+    edges[q] = new unsigned[degree[q]];
+    degree[q] = 0;
+  }
+  // Compute the graph
+  for (unsigned q = 1; q <= m; ++q) {
+    edges[psi[q]][degree[psi[q]]++] = q; 
+  }
+  
+  // Compute omega[] with dfs
+  unordered_map<char, unsigned> stackTable;
+  set<unsigned> setOfStates;
+  //unsigned minimumHalt = 0;
+  dfs(0, stackTable, setOfStates);
+  assert(stackTable.empty());
+  assert(setOfStates.empty());
+#if 1
+  cerr << "Debug" << endl;
+  for (unsigned index = 0; index <= m; ++index) {
+    cerr << index << " with " << pattern[index] << " psi = " << psi[index] << " and omega = " << omega[index] << endl;
+  }
+  cerr << endl;
+#endif
+  
+  // TODO: delete the graph and degrees
+  //free(degree);
+  for (unsigned index = 0; index <= m; ++index)
+    free(edges[index]);
 }
 #endif
 
 void hyperKmp() {
 	if (m > n) {
-		cerr << "pattern biger than string!" << endl;
+		cerr << "pattern bigger than string!" << endl;
 		return;
 	}
 	compressPi();
-  // cerr << "go voer pi" << endl;
 
 	unsigned q = 0;
 	unsigned maximum = 0;
 	for (unsigned index = 0; index < n; ++index) {
 		// Search now on psi
-  //unsigned loopsCtr = 0;
-
-#if 1
-		//unsigned bef = q;
-		int last = -1;
-		//cerr << "start with " << q << endl;
-		while ((q > 0) && (str[index] != pattern[q])) {
-			last = pi[q - 1];
-			//cerr << "set last = " << last << endl;
+    //unsigned loopsCtr = 0;
+#if 0
+		unsigned bef = q;
+		unsigned last = 0;
+    
+    // What happens when q is m?
+    //unsigned lastHalt = omega[q];
+		//cerr << index << " before while " << q << endl;
+    while ((q > 0) && (str[index] != pattern[q])) {
+			//last = q;
 			q = psi[q];
       //loopsCtr++;
 		}
 		//cerr << "end with " << q << " and " << last << endl;
-
-    if (last != -1)
-      q = last;
-      //q = (last == -1) ? q : last;
-		//unsigned after = q;
+    //q = (!last) ? q : last;
+    unsigned after = q;
 #else
   //q = bef;
   unsigned ctr = 0;
   while ((q > 0) && (str[index] != pattern[q])) {
     q = pi[q - 1];
-    loopsCtr++;
+    //loopsCtr++;
   }
 #if 0
+  //cerr << q << " vs " << after << endl;
   if (q != after) {
     cerr << "assert : at " << index << " " << q << " vs " << after << endl;
     assert(0);
@@ -470,31 +553,32 @@ void hyperKmp() {
 			++q;
 		}
 		if (q == m) {
+      //cerr << "wat?" << endl;
 			if ((++matchCount) <= MAX_COUNT) {
         match[matchCount - 1] = index - m + 1;
       }
       // goes a step back, because the condition in while will be already set to false
-			//q = pi[q - 1];
 		}
 	}
-	cerr << maximum << endl;
+	cerr << "maximum loopsCtr = " << maximum << endl;
 }
 
 int main(int argc, char** argv) {
     ifstream in;
-#if 0
+#if 1
   if (argc < 2) {
-    cerr << "Usage: " << argv[0] << "file " << endl;
+    cerr << "Usage: " << argv[0] << " file " << endl;
     return 0;
   }
   in.open(argv[1]);
 #else
-  in.open(0 ? "strmatch.in" : "test/grader_test30.in");
+  in.open(1 ? "strmatch.in" : "test/grader_test30.in");
 #endif
   in >> pattern >> str;
   m = strlen(pattern);
   n = strlen(str);
-
+  pattern[m] = '#';
+  cerr << m << " " << n << endl;
   if (m > n)
         goto print;
 
@@ -519,8 +603,10 @@ int main(int argc, char** argv) {
 #else
     out.open("response.out");
 #endif
+    cerr << "alles gut" << endl;
     out << matchCount << "\n";
     matchCount = matchCount > MAX_COUNT ? MAX_COUNT : matchCount;
+    cerr << matchCount << endl;
     for (unsigned index = 0; index < matchCount; ++index)
         out << match[index] << " ";
     out << "\n";
