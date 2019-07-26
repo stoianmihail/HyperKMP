@@ -15,13 +15,13 @@ using namespace std;
 
 unsigned n, m, matchCount;
 char str[MAX_N + 5], pattern[MAX_N + 5];
-unsigned match[MAX_COUNT];
+unsigned match[MAX_COUNT]; // print only the first 1000 matches
+
 #if 0
 std::vector<std::pair<unsigned, unsigned>> store;
 unsigned **jumps;
 uint64_t *configurations;
 unsigned shifted;
-#endif
 
 static void binary(uint64_t x) {
     cerr << "bits : ";
@@ -60,7 +60,6 @@ static uint64_t log2(uint64_t x)
     return lg;
 }
 
-#if 0
 void preprocessing() {
   // assert all letters are from the lower english alphabet
 
@@ -365,8 +364,8 @@ unsigned psi[MAX_N + 2];
 unsigned degree[MAX_N + 2];
 unsigned *edges[MAX_N + 2];
 unsigned omega[MAX_N + 2];
-//unsigned lastSeen[MAX_N + 2];
 
+#if 0
 void normalPi() {
   unsigned k = 0;
   for (unsigned q = 1; q < m; ++q) {
@@ -379,11 +378,13 @@ void normalPi() {
     pi[q] = k;
 	}
 }
-
+#else
+//-------------------------------------------------------------
 void dfs(unsigned currentState, unordered_map<char, unsigned>& stackTable, set<unsigned>& setOfStates) 
 // at every currentState we explore a branch, having stored the active nodes in a hash table
 {
-  int replacer = -1;
+  unsigned replacer;
+  bool replaced = false;
   unsigned minimumHalt = 0;
   
   // We don't use the state 0, because in the search of KMP we always stop before reaching 0
@@ -397,6 +398,8 @@ void dfs(unsigned currentState, unordered_map<char, unsigned>& stackTable, set<u
     } else {
       // Than, see which index should be replaced
       // With this, update now the overall minimum, to use it for the next steps
+      
+      replaced = true;
       replacer = iter->second;
       
       // TODO: use a fibonaci heap / priority_queue with lazy-update / or google set, but please, no STL-set!
@@ -409,19 +412,18 @@ void dfs(unsigned currentState, unordered_map<char, unsigned>& stackTable, set<u
       setOfStates.erase(replacer);
       setOfStates.insert(currentState);
     }
-    minimumHalt = *setOfStates.begin();
+    minimumHalt = psi[*setOfStates.begin()];
   }
+  omega[currentState] = minimumHalt;
   
-  omega[currentState] = psi[minimumHalt];
   // Explore the neighbours
-  for (unsigned index = 0; index < degree[currentState]; ++index) {
+  for (unsigned index = 0; index < degree[currentState]; ++index)
     dfs(edges[currentState][index], stackTable, setOfStates);
-  }
   
   // Reset the table
   if (currentState != 0) {
     // Did we change something?
-    if (replacer == -1) {
+    if (!replaced) {
       // That's the first time the char has been inserted
       // Simply delete it.
       stackTable.erase(pattern[currentState]);
@@ -437,15 +439,21 @@ void dfs(unsigned currentState, unordered_map<char, unsigned>& stackTable, set<u
     }
   }
 }
-
-#if 1
+//-------------------------------------------------------------
 void compressPi() 
 // compress pi[] and create two new arrays: psi[] and omega[]
 // description in README
 {
-	unsigned k = 0;
+  // Initialize the first values
+  // 0 is the first state. At this step it receives 2 sons
+  psi[0] = 0;
+  psi[1] = 0;
+  degree[0] = 2;
 	// Compute pi and psi
+  unsigned k = 0;
   for (unsigned q = 1; q < m; ++q) {
+    // Compute the normal pi
+    // If I'm not wrong, it could be also done with psi!
 	  while ((k > 0) && (pattern[q] != pattern[k])) {
       k = pi[k - 1];
     }
@@ -458,111 +466,125 @@ void compressPi()
 		// If no jump, connect directly to 0
 		if (pi[q] == 0) {
       psi[q + 1] = 0;
-		// Try to hang the edge (q, pi[q]) at the root of pi[q]
 		} else if (pattern[q + 1] == pattern[pi[q]]) {
-			psi[q + 1] = psi[pi[q]];
+			// Try to hang the edge (q, pi[q]) at the root of pi[q]
+      psi[q + 1] = psi[pi[q]];
 		} else {
 			// Put the edge back where it was
 			psi[q + 1] = pi[q];
 		}
-		
-		//cerr << q << " trigger with " << pi[q] << " " << psi[q + 1] << endl;
-		
 		// build the graph of psi, by counting the degree of each node
 		degree[psi[q + 1]]++;
   }
   
   // Alloc the graph and reset the degrees to 0
-  for (unsigned q = 0; q <= m; ++q) {
-    edges[q] = new unsigned[degree[q]];
+  for (unsigned q = 0; q < m; ++q) {
+    if (degree[q])
+      edges[q] = (unsigned*)calloc(degree[q], sizeof(unsigned));
     degree[q] = 0;
   }
   // Compute the graph
   for (unsigned q = 1; q <= m; ++q) {
     edges[psi[q]][degree[psi[q]]++] = q; 
   }
+
+#if 0
+  cerr << "Debug" << endl;
+  for (unsigned index = 0; index < m; ++index) {
+    cerr << "Main node : " << index << " ";
+    for (unsigned ptr = 0; ptr < degree[index]; ++ptr) {
+      cerr << edges[index][ptr] << " ";
+    }
+    cerr << endl;
+  }
+  cerr << endl;
+#endif
   
   // Compute omega[] with dfs
   unordered_map<char, unsigned> stackTable;
   set<unsigned> setOfStates;
-  //unsigned minimumHalt = 0;
   dfs(0, stackTable, setOfStates);
   assert(stackTable.empty());
   assert(setOfStates.empty());
-#if 1
+
+#if 0
   cerr << "Debug" << endl;
   for (unsigned index = 0; index <= m; ++index) {
     cerr << index << " with " << pattern[index] << " psi = " << psi[index] << " and omega = " << omega[index] << endl;
   }
   cerr << endl;
 #endif
-  
-  // TODO: delete the graph and degrees
-  //free(degree);
-  for (unsigned index = 0; index <= m; ++index)
-    free(edges[index]);
+
+  // delete the graph
+  for (unsigned index = 0; index < m; ++index)
+    if (degree[index])
+      free(edges[index]);
 }
 #endif
-
+//-------------------------------------------------------------
 void hyperKmp() {
 	if (m > n) {
 		cerr << "pattern bigger than string!" << endl;
 		return;
 	}
+	
+	// Create pi[], psi[] and omega[]
 	compressPi();
-
-	unsigned q = 0;
-	unsigned maximum = 0;
+  
+  unsigned q = 0; // current state
+	unsigned maximum = 0; // to test how many loop steps are maximal done
+	unsigned sum = 0;
 	for (unsigned index = 0; index < n; ++index) {
-		// Search now on psi
-    //unsigned loopsCtr = 0;
+		// Search only on psi now
+#if 1
+    unsigned loopsCtr = 0;
 #if 0
-		unsigned bef = q;
-		unsigned last = 0;
-    
-    // What happens when q is m?
-    //unsigned lastHalt = omega[q];
-		//cerr << index << " before while " << q << endl;
-    while ((q > 0) && (str[index] != pattern[q])) {
-			//last = q;
+    // lastHalt represents the last state which should be discovered (starting from q)
+		unsigned lastHalt = omega[q];
+		while ((q > lastHalt) && (str[index] != pattern[q])) {
 			q = psi[q];
-      //loopsCtr++;
+      loopsCtr++;
 		}
-		//cerr << "end with " << q << " and " << last << endl;
-    //q = (!last) ? q : last;
-    unsigned after = q;
 #else
-  //q = bef;
-  unsigned ctr = 0;
   while ((q > 0) && (str[index] != pattern[q])) {
     q = pi[q - 1];
-    //loopsCtr++;
-  }
-#if 0
-  //cerr << q << " vs " << after << endl;
-  if (q != after) {
-    cerr << "assert : at " << index << " " << q << " vs " << after << endl;
-    assert(0);
+    loopsCtr++;
   }
 #endif
-#endif
-  //if (loopsCtr > maximum)
-    //maximum = loopsCtr;
 
+#if 0
+    //cerr << q << " vs " << after << endl;
+    if (q != after) {
+      cerr << "assert : at " << index << " " << q << " vs " << after << endl;
+      assert(0);
+    }
+#endif
+    // Compute the average and the maximum loop steps
+    sum += loopsCtr;
+    if (loopsCtr > maximum) 
+      maximum = loopsCtr;
+#else
+    // lastHalt represents the last state which should be discovered (starting from q)
+		unsigned lastHalt = omega[q];
+		while ((q > lastHalt) && (str[index] != pattern[q])) {
+			q = psi[q];
+      loopsCtr++;
+		}
+#endif
 		if (str[index] == pattern[q]) {
 			++q;
 		}
+		
+		// Found?
 		if (q == m) {
-      //cerr << "wat?" << endl;
-			if ((++matchCount) <= MAX_COUNT) {
+      if ((++matchCount) <= MAX_COUNT) {
         match[matchCount - 1] = index - m + 1;
       }
-      // goes a step back, because the condition in while will be already set to false
-		}
+    }
 	}
-	cerr << "maximum loopsCtr = " << maximum << endl;
+	cerr << "avg = " << ((double)sum / n) << " and max loopsCtr = " << maximum << endl;
 }
-
+//-------------------------------------------------------------
 int main(int argc, char** argv) {
     ifstream in;
 #if 1
@@ -577,36 +599,22 @@ int main(int argc, char** argv) {
   in >> pattern >> str;
   m = strlen(pattern);
   n = strlen(str);
-  pattern[m] = '#';
-  cerr << m << " " << n << endl;
+  pattern[m] = '#'; // char out-of-dictionary
+  
   if (m > n)
-        goto print;
-
-  //cerr << pattern << endl << str << endl;
-
-#if 0
-  compressPi();
-
-  for (unsigned index = 0; index < m; ++index) {
-      cerr << index << " -> " << psi[index] << endl;
-  }
-  cerr << endl;
-#endif
+      goto print;
   hyperKmp();
-
-  //cerr << encode('9') << " " << encode('b') << " " << encode('C');
 
   print : {
       ofstream out;
-#if 0
+#if 1
     out.open("strmatch.out");
 #else
     out.open("response.out");
 #endif
-    cerr << "alles gut" << endl;
+    // Print the number of matches and only the first 1000 (if available) 
     out << matchCount << "\n";
     matchCount = matchCount > MAX_COUNT ? MAX_COUNT : matchCount;
-    cerr << matchCount << endl;
     for (unsigned index = 0; index < matchCount; ++index)
         out << match[index] << " ";
     out << "\n";
