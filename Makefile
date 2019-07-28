@@ -1,3 +1,3 @@
-hyper: hyperkmp.cpp
-	g++ -O3 hyperkmp.cpp -o hyper
+benchmark: benchmark.cpp
+	g++ -O3 benchmark.cpp -o benchmark
 
