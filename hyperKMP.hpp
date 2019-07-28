@@ -19,7 +19,7 @@ class hyperKMP
   void dfs(unsigned state, std::unordered_map<char, unsigned>& indexes, std::vector<unsigned>& activeNodes, unsigned minimumHalt);
   
   // For benchmarking
-  unsigned hyperSum, normalSum, hyperMaximum, normalMaximum;
+  unsigned testCases, hyperSum, normalSum, hyperMaximum, normalMaximum;
       
   public:
   hyperKMP();

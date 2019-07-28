@@ -32,6 +32,7 @@ hyperKMP::hyperKMP(char* pattern, unsigned mode) {
   this->omega = new unsigned[this->length + 1];
   this->degrees = new unsigned[this->length + 1];
   this->edges = new unsigned*[this->length + 1];
+  compressPi();
 }
 //---------------------------------------------------------------------------
 void hyperKMP::compressPi()
@@ -101,10 +102,10 @@ void hyperKMP::compressPi()
   assert(indexes.empty());
   assert(activeNodes.empty());  
 
-#if 0
+#if 1
   cerr << "Debug" << endl;
-  for (unsigned index = 0; index <= m; ++index) {
-    cerr << index << " with " << pattern[index] << " psi = " << psi[index] << " and omega = " << omega[index] << endl;
+  for (unsigned index = 0; index <= this->length; ++index) {
+    cerr << index << " with " << pattern[index] << " pi = " << pi[index] << " psi = " << psi[index] << " and omega = " << omega[index] << endl;
   }
   cerr << endl;
 #endif
@@ -177,6 +178,7 @@ bool hyperKMP::search(char* str)
   if (this->length > n)
     return false;
   
+  ++testCases;
   switch (this->mode) {
     case HYPER_MODE : {
       unsigned q = 0; // current state
@@ -224,7 +226,7 @@ bool hyperKMP::search(char* str)
         unsigned after = q;
     
         q = before;
-        if (q >= this->length / 2 && str[index] != pattern[q] && pi[q - 1] != 0) cerr << '#' << endl;
+        //if (q >= this->length / 2 && str[index] != pattern[q] && pi[q - 1] != 0) cerr << '#' << endl;
         while ((q > 0) && (str[index] != pattern[q])) {
           q = pi[q - 1];
           normalLoopsCtr++;
@@ -264,7 +266,7 @@ void hyperKMP::benchmark() {
   cerr << "Show benchmark" << endl;
   cerr << "Hyper: sum = " << hyperSum << ", max = " << hyperMaximum << endl; 
   cerr << "Normal: sum = " << normalSum << ", max = " << normalMaximum << endl;
-  cerr << "Win of " << (normalSum - hyperSum) << endl;
+  cerr << "Win for " << testCases << " tests -> " << (normalSum - hyperSum) << " with rel = " << 100 * ((double)(normalSum - hyperSum) / normalSum) << endl;
 }
 //---------------------------------------------------------------------------
 int main(int argc, char** argv) {
