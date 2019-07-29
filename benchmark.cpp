@@ -6,8 +6,13 @@
 #include <unordered_map>
 #include <chrono>
 #include "hyperKMP.hpp"
+
+#include <emmintrin.h>
+#include <pmmintrin.h>
+#include <smmintrin.h>
+
+#include <boost/iostreams/device/mapped_file.hpp>
 //---------------------------------------------------------------------------
-#define MAX_N 1000
 #define HYPER_MODE 0
 #define NORMAL_MODE 1
 #define TEST_MODE 2
@@ -55,10 +60,10 @@ void hyperKMP::normalPi()
       k++;
     pi[q] = k;
   }
-#if 0
+#if 1
   cerr << "Debug pi[]" << endl;
   for (unsigned index = 0; index < this->length; ++index) {
-    cerr << pi[index] << " ";
+    cerr << index << " -> " << pi[index] << endl;
   }
   cerr << endl;
 #endif
@@ -76,7 +81,7 @@ void hyperKMP::compressPi()
   // Compute pi and psi
   unsigned k = 0;
   for (unsigned q = 1; q < this->length; ++q) {
-    // Compute the normal pi
+    // Compute psi
     while ((k > 0) && (pattern[q] != pattern[k])) {
       k = psi[k];
     }
@@ -120,7 +125,7 @@ void hyperKMP::compressPi()
   cerr << "Debug" << endl;
   for (unsigned index = 0; index <= this->length; ++index) {
     cerr << "Main node : " << index << " ";
-    for (unsigned ptr = 0; ptr < degree[index]; ++ptr) {
+    for (unsigned ptr = 0; ptr < degrees[index]; ++ptr) {
       cerr << edges[index][ptr] << " ";
     }
     cerr << endl;
@@ -204,23 +209,26 @@ void hyperKMP::dfs(unsigned state, unordered_map<char, unsigned>& indexes, vecto
   }
 }
 //---------------------------------------------------------------------------
-bool hyperKMP::search(char* str)
+bool hyperKMP::search(const char* str, unsigned n)
 // checks if the pattern can be found in str
 {
-  unsigned n = strlen(str);
   if (this->length > n)
     return false;
   
-  ++testCases;
   switch (this->mode) {
     case HYPER_MODE : {
       unsigned q = 0; // current state
       for (unsigned index = 0; index < n; ++index) {
         // Search only on psi now
-        // lastHalt represents the last state which should be discovered (starting from q)
-        //unsigned lastHalt = omega[q];
+#if 1
         while ((q > 0) && (str[index] != pattern[q]))
           q = psi[q];
+#else
+        // lastHalt represents the last state which should be checked (starting from q)
+        unsigned lastHalt = omega[q];
+        while ((q > 0) && (str[index] != pattern[q]))
+          q = psi[q];
+#endif
         if (str[index] == pattern[q]) {
           ++q;
         }
@@ -298,40 +306,76 @@ void hyperKMP::benchmark() {
   cerr << "Show benchmark" << endl;
   cerr << "Hyper: sum = " << hyperSum << ", max = " << hyperMaximum << endl; 
   cerr << "Normal: sum = " << normalSum << ", max = " << normalMaximum << endl;
-  cerr << "Win for " << testCases << " tests -> " << (normalSum - hyperSum) << " with rel = " << 100 * ((double)(normalSum - hyperSum) / normalSum) << endl;
+  cerr << "Win " << (normalSum - hyperSum) << " comparisons saved. Relative saving = " << 100 * ((double)(normalSum - hyperSum) / normalSum) << "%" << endl;
+}
+//---------------------------------------------------------------------------
+static inline const char* findNl(const char* reader, const char* readerLimit)
+{
+#if 0
+   auto bars=_mm_set1_epi8('\n');
+   auto limit=readerLimit-16;
+   for (;reader<=limit;reader+=16) {
+      auto nextChars=_mm_lddqu_si128(reinterpret_cast<const __m128i*>(reader));
+      auto cmp=_mm_cmpeq_epi8(nextChars,bars);
+      unsigned mask=_mm_movemask_epi8(cmp);
+      if (mask)
+         return reader=reader+__builtin_ctzl(mask);
+   }
+   for (;reader<=readerLimit;++reader)
+      if ((*reader)=='\n')
+         return reader;
+   return nullptr;
+#else
+   return static_cast<const char*>(memchr(reader, '\n', readerLimit-reader));
+#endif
 }
 //---------------------------------------------------------------------------
 int main(int argc, char** argv) {
-  if (argc < 3) {
-    cerr << "Usage: " << argv[0] << "<pattern> <file> <mode>" << endl;
+  if (argc < 4) {
+    cerr << "Usage: " << argv[0] << "\n<pattern> (spaces are also allowed, simply an underscore instead: 'aa bb' -> 'aa_bb')\n<file>\n<mode>(0 -> hyperKMP, 1 -> normalKMP, 2 -> benchmark to see comparisons)" << endl;
     return 0;
   }
-  ifstream in;
-  in.open(argv[2]);
+  // ifstream in;
+  // in.open(argv[2]);
   
   unsigned mode = atoi(argv[3]);
+  if (mode > TEST_MODE) {
+    cerr << "Mode not available!" << endl;
+    exit(0);
+  }
   hyperKMP hyper(argv[1], mode);
   
-  char str[MAX_N + 2];
-  unsigned count = 0;
+  const char* str;
+  unsigned testCases = 0;
   unsigned countMatches = 0;
   
+  boost::iostreams::mapped_file_source f(argv[2]);
+  auto fileBegin = f.data();
+  auto fileEnd = fileBegin + f.size();
+  auto reader = fileBegin;
+  
   auto start = std::chrono::high_resolution_clock::now();
-  while (in.getline(str, MAX_N)) {
-    countMatches += hyper.search(str);
-#if 0
-    cerr << str << endl;
-    if ((++count) == 2)
-      exit(0);
-#endif    
+  while (true) {
+    if (!reader) 
+      break;
+    ++testCases;
+    
+    str = reader;
+    unsigned n;
+    {
+      auto eol = findNl(reader, fileEnd);
+      n = eol ? (eol - reader) : (fileEnd - reader);
+      reader = eol? (eol + 1) : nullptr;
+    }
+    countMatches += hyper.search(str, n);
   }
-  cout << "Matches = " << countMatches << endl;
+  cout << "Matches = " << countMatches << " out of " << testCases << endl;
   if (mode == TEST_MODE) {
     hyper.benchmark();
   } else {
     auto stop = std::chrono::high_resolution_clock::now();
     auto duration = stop - start;
-    cerr << "Mode (0 -> hyperKMP, 1 -> kmp) " << mode << " took: " << duration.count() * 1e-6 << "ms" << endl;
+    cerr << "Mode (0 -> hyperKMP, 1 -> kmp, 2 -> benchmark) " << mode << " took: " << duration.count() * 1e-6 << "ms" << endl;
   }
   return 0;
 }
