@@ -23,6 +23,12 @@ hyperKMP::hyperKMP(char* pattern, unsigned mode) {
   this->pattern = new char[this->length + 2];
   strcpy(this->pattern, pattern); // the last char should be null
 
+  // Transform pattern without underscores
+  for (unsigned index = 0; index < this->length; ++index)
+      if (this->pattern[index] == '_') 
+        this->pattern[index] = ' ';
+  cerr << "modefied pattern: " << this->pattern << endl;
+      
   // For benchmarking
   this->hyperSum = this->hyperMaximum = this->normalSum = this->normalMaximum = 0;
   
