@@ -20,13 +20,13 @@ class hyperKMP
   void dfs(unsigned state, std::unordered_map<char, unsigned>& indexes, std::vector<unsigned>& activeNodes, unsigned minimumHalt);
   
   // For benchmarking
-  unsigned testCases, hyperSum, normalSum, hyperMaximum, normalMaximum;
+  unsigned hyperSum, normalSum, hyperMaximum, normalMaximum;
       
   public:
   hyperKMP();
   hyperKMP(char* pattern, unsigned mode);
   // TODO: After benchmark, place the const back!
-  bool search(char* str);
+  bool search(const char* str, unsigned n);
   void benchmark();
 };
 //---------------------------------------------------------------------------
