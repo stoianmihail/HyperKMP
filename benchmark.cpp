@@ -22,23 +22,46 @@ hyperKMP::hyperKMP(char* pattern, unsigned mode) {
   this->length = strlen(pattern);
   this->pattern = new char[this->length + 2];
   strcpy(this->pattern, pattern); // the last char should be null
-
+  
   // Transform pattern without underscores
   for (unsigned index = 0; index < this->length; ++index)
       if (this->pattern[index] == '_') 
         this->pattern[index] = ' ';
-  cerr << "modefied pattern: " << this->pattern << endl;
+  cerr << "modified pattern: " << this->pattern << endl;
       
   // For benchmarking
   this->hyperSum = this->hyperMaximum = this->normalSum = this->normalMaximum = 0;
   
-  this->valid = new bool[this->length + 1];
-  this->pi = new unsigned[this->length + 1];
-  this->psi = new unsigned[this->length + 1];
-  this->omega = new unsigned[this->length + 1];
-  this->degrees = new unsigned[this->length + 1];
+  this->valid = new bool[this->length + 1]();
+  this->psi = new unsigned[this->length + 1]();
+  this->omega = new unsigned[this->length + 1]();
+  this->degrees = new unsigned[this->length + 1]();
   this->edges = new unsigned*[this->length + 1];
   compressPi();
+  
+  // Only for benchmark reasons
+  this->pi = new unsigned[this->length + 1]();
+  normalPi();
+}
+//---------------------------------------------------------------------------
+void hyperKMP::normalPi() 
+// compute the normal pi[] table
+{
+  unsigned k = 0;
+  for (unsigned q = 1; q < this->length; ++q) {
+    while ((k > 0) && (pattern[q] != pattern[k]))
+      k = pi[k - 1];
+    if (pattern[q] == pattern[k])
+      k++;
+    pi[q] = k;
+  }
+#if 0
+  cerr << "Debug pi[]" << endl;
+  for (unsigned index = 0; index < this->length; ++index) {
+    cerr << pi[index] << " ";
+  }
+  cerr << endl;
+#endif
 }
 //---------------------------------------------------------------------------
 void hyperKMP::compressPi()
@@ -54,17 +77,20 @@ void hyperKMP::compressPi()
   unsigned k = 0;
   for (unsigned q = 1; q < this->length; ++q) {
     // Compute the normal pi
-    // TODO: If I'm not wrong, it could be also done with psi!
     while ((k > 0) && (pattern[q] != pattern[k])) {
-      k = pi[k - 1];
+      k = psi[k];
     }
     if (pattern[q] == pattern[k]) {
       k++;
     }
-    pi[q] = k;
-
-    // Compress possbile path
+    // Compress possible path
+    // For understandability reasons, keep the formula like this
+    // TODO: it could be replaced by: (pattern[q + 1] == pattern[k]) ? psi[k] : k
+#if 1
+    psi[q + 1] = (!k) ? 0 : ((pattern[q + 1] == pattern[k]) ? psi[k] : k);
+#else
     // If no jump, connect directly to 0
+    pi[q] = k;
     if (pi[q] == 0) {
       psi[q + 1] = 0;
     } else if (pattern[q + 1] == pattern[pi[q]]) {
@@ -75,6 +101,7 @@ void hyperKMP::compressPi()
       psi[q + 1] = pi[q];
     }
     // build the graph of psi, by counting the degree of each node
+#endif
     degrees[psi[q + 1]]++;
   }
   
@@ -91,7 +118,7 @@ void hyperKMP::compressPi()
 
 #if 0
   cerr << "Debug" << endl;
-  for (unsigned index = 0; index < m; ++index) {
+  for (unsigned index = 0; index <= this->length; ++index) {
     cerr << "Main node : " << index << " ";
     for (unsigned ptr = 0; ptr < degree[index]; ++ptr) {
       cerr << edges[index][ptr] << " ";
@@ -109,9 +136,9 @@ void hyperKMP::compressPi()
   assert(activeNodes.empty());  
 
 #if 1
-  cerr << "Debug" << endl;
+  cerr << "Debug psi[]" << endl;
   for (unsigned index = 0; index <= this->length; ++index) {
-    cerr << index << " with " << pattern[index] << " pi = " << pi[index] << " psi = " << psi[index] << " and omega = " << omega[index] << endl;
+    cerr << index << " with " << pattern[index] << " psi = " << psi[index] << " and omega = " << omega[index] << endl;
   }
   cerr << endl;
 #endif
@@ -237,7 +264,6 @@ bool hyperKMP::search(char* str)
           q = pi[q - 1];
           normalLoopsCtr++;
         }
-        
         assert(q == after);
 #if 0
         //cerr << q << " vs " << after << endl;
@@ -299,7 +325,7 @@ int main(int argc, char** argv) {
       exit(0);
 #endif    
   }
-  cout << countMatches << endl;
+  cout << "Matches = " << countMatches << endl;
   if (mode == TEST_MODE) {
     hyper.benchmark();
   } else {

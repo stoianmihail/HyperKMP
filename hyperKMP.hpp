@@ -16,6 +16,7 @@ class hyperKMP
   bool* valid;
   
   void compressPi();
+  void normalPi();
   void dfs(unsigned state, std::unordered_map<char, unsigned>& indexes, std::vector<unsigned>& activeNodes, unsigned minimumHalt);
   
   // For benchmarking
